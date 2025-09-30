@@ -24,7 +24,7 @@ scripts:
    → Update Progress Tracking: Initial Constitution Check
 5. Execute Phase 0 → research.md
    → If NEEDS CLARIFICATION remain: ERROR "Resolve unknowns"
-6. Execute Phase 1 → contracts, data-model.md, quickstart.md, agent-specific template file (e.g., `CLAUDE.md` for Claude Code, `.github/copilot-instructions.md` for GitHub Copilot, `GEMINI.md` for Gemini CLI, `QWEN.md` for Qwen Code or `AGENTS.md` for opencode).
+6. Execute Phase 1 → architecture.md, component-design.md, ui-ux-mockup.md (if frontend), error-handling.md, contracts/, data-model.md, quickstart.md, agent-specific template file (e.g., `CLAUDE.md` for Claude Code, `.github/copilot-instructions.md` for GitHub Copilot, `GEMINI.md` for Gemini CLI, `QWEN.md` for Qwen Code or `AGENTS.md` for opencode).
 7. Re-evaluate Constitution Check section
    → If new violations: Refactor design, return to Phase 1
    → Update Progress Tracking: Post-Design Constitution Check
@@ -62,6 +62,10 @@ scripts:
 specs/[###-feature]/
 ├── plan.md              # This file (/plan command output)
 ├── research.md          # Phase 0 output (/plan command)
+├── architecture.md      # Phase 1 output (/plan command) - Overall system architecture
+├── component-design.md  # Phase 1 output (/plan command) - Component design with sequence diagrams
+├── ui-ux-mockup.md     # Phase 1 output (/plan command) - UI/UX mockups (if frontend/extension/mobile)
+├── error-handling.md    # Phase 1 output (/plan command) - Error handling strategy
 ├── data-model.md        # Phase 1 output (/plan command)
 ├── quickstart.md        # Phase 1 output (/plan command)
 ├── contracts/           # Phase 1 output (/plan command)
@@ -135,54 +139,125 @@ directories captured above]
 
 **Output**: research.md with all NEEDS CLARIFICATION resolved
 
-## Phase 1: Design & Contracts
+## Phase 1: Contracts & Architecture (Contract-First)
 *Prerequisites: research.md complete*
 
-1. **Extract entities from feature spec** → `data-model.md`:
+1. **Generate architecture overview** → `architecture.md`:
+   - High-level system architecture for entire repository
+   - Technology stack and framework choices
+   - Deployment architecture and infrastructure
+   - Integration patterns between components
+   - **Include architecture diagram using Mermaid syntax**
+
+2. **Generate component design** → `component-design.md`:
+   - Detailed component breakdown for entire system
+   - Component responsibilities and interfaces
+   - Data flow between components
+   - **Include sequential diagrams using Mermaid syntax**
+   - Component interaction patterns
+
+3. **Generate UI/UX mockup design** → `ui-ux-mockup.md` (if frontend/extension/mobile):
+   - User interface mockups in simple markdown format
+   - User experience flow diagrams
+   - Screen layouts and navigation patterns
+   - Visual design guidelines
+   - **Skip this file if backend-only project**
+
+4. **Generate error handling strategy** → `error-handling.md`:
+   - Error handling patterns for both frontend and backend
+   - Error classification and severity levels
+   - Error propagation strategies
+   - User-facing error messages and recovery flows
+   - Logging and monitoring strategies
+
+5. **Extract entities from feature spec** → `data-model.md`:
    - Entity name, fields, relationships
    - Validation rules from requirements
    - State transitions if applicable
+   - **Generate ERD diagram using Mermaid syntax**
+   - **Include TypeScript type definitions for entities**
 
-2. **Generate API contracts** from functional requirements:
+6. **Generate API contracts** from functional requirements → `/contracts/`:
    - For each user action → endpoint
    - Use standard REST/GraphQL patterns
-   - Output OpenAPI/GraphQL schema to `/contracts/`
+   - **Generate OpenAPI/GraphQL schema files**
+   - **Generate TypeScript type definitions from schemas**
+   - **Create mock server configurations (json-server, MSW)**
+   - **Generate Pact contract templates for consumer-driven testing**
 
-3. **Generate contract tests** from contracts:
+7. **Generate contract validation tools**:
+   - **TypeScript type validation utilities**
+   - **Schema validation middleware**
+   - **Contract compliance checkers**
+   - **Mock data generators based on schemas**
+
+8. **Generate contract tests** from contracts:
    - One test file per endpoint
    - Assert request/response schemas
+   - **Contract compliance tests (Pact/OpenAPI)**
+   - **Type safety validation tests**
    - Tests must fail (no implementation yet)
 
-4. **Extract test scenarios** from user stories:
+9. **Extract test scenarios** from user stories:
    - Each story → integration test scenario
    - Quickstart test = story validation steps
+   - **Contract-driven test scenarios**
 
-5. **Update agent file incrementally** (O(1) operation):
-   - Run `{SCRIPT}`
-     **IMPORTANT**: Execute it exactly as specified above. Do not add or remove any arguments.
-   - If exists: Add only NEW tech from current plan
-   - Preserve manual additions between markers
-   - Update recent changes (keep last 3)
-   - Keep under 150 lines for token efficiency
-   - Output to repository root
+10. **Update agent file incrementally** (O(1) operation):
+    - Run `{SCRIPT}`
+      **IMPORTANT**: Execute it exactly as specified above. Do not add or remove any arguments.
+    - If exists: Add only NEW tech from current plan
+    - Preserve manual additions between markers
+    - Update recent changes (keep last 3)
+    - Keep under 150 lines for token efficiency
+    - Output to repository root
 
-**Output**: data-model.md, /contracts/*, failing tests, quickstart.md, agent-specific file
+**Output**: architecture.md, component-design.md, ui-ux-mockup.md (if applicable), error-handling.md, data-model.md (with TypeScript types), /contracts/* (with types, mocks, Pact templates), contract validation tools, failing contract tests, quickstart.md, agent-specific file
 
 ## Phase 2: Task Planning Approach
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
-**Task Generation Strategy**:
+## Task Generation Strategy (Hybrid: Contract-First + Bottom-Up)
+
+The `/tasks` command will generate tasks.md using the **Hybrid Contract-First + Bottom-Up** approach by analyzing:
+1. **Contract definitions** from `/contracts/` (OpenAPI specs, TypeScript types)
+2. **Architecture dependencies** from `architecture.md`
+3. **Component implementation order** from `component-design.md`
+4. **UI/UX implementation priorities** from `ui-ux-mockup.md` (if applicable)
+5. **Error handling implementation** from `error-handling.md`
+6. **Data model dependencies** from `data-model.md`
+7. **Test scenarios** from `quickstart.md`
+
+**Hybrid Task Generation Strategy**:
+
+**Phase 1: Contract-First Tasks**
 - Load `.specify/templates/tasks-template.md` as base
-- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
+- Generate contract validation tasks from `/contracts/`
+- Each OpenAPI spec → contract test task [P]
+- Each TypeScript type → type validation task [P]
+- Mock server setup → infrastructure task [S]
+- Pact contract tests → contract verification task [P]
+
+**Phase 2: Bottom-Up Implementation (Parallel)**
+- **Frontend Track** (guided by contracts):
+  - Each UI component → implementation task [P]
+  - Each API client → contract-compliant implementation [P]
+  - Each form/validation → type-safe implementation [P]
+- **Backend Track** (guided by contracts):
+  - Each entity → model creation task [P]
+  - Each service → contract-compliant implementation [P]
+  - Each endpoint → OpenAPI spec compliance [P]
+
+**Phase 3: Integration & Validation**
+- Contract compliance verification
+- End-to-end integration tests
+- Performance validation
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
+- **Contract-First**: Contracts → Mock servers → Contract tests
+- **Parallel Bottom-Up**: Frontend & Backend tracks run simultaneously
+- **Integration**: Contract validation → E2E tests → Performance
+- Mark [P] for parallel execution, [S] for sequential dependencies
 
 **Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
 
@@ -222,4 +297,4 @@ directories captured above]
 - [ ] Complexity deviations documented
 
 ---
-*Based on Constitution v2.1.1 - See `/memory/constitution.md`*
+*Based on Constitution v1.0.0 - See `/memory/constitution.md`*

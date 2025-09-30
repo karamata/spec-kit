@@ -14,39 +14,56 @@ if (-not $FeatureDescription -or $FeatureDescription.Count -eq 0) {
 }
 $featureDesc = ($FeatureDescription -join ' ').Trim()
 
-# Resolve repository root. Prefer git information when available, but fall back
-# to searching for repository markers so the workflow still functions in repositories that
-# were initialised with --no-git.
+# Function to find the repository root by searching for existing project markers
+# Prioritizes .specify directory over .git to handle nested git repositories
 function Find-RepositoryRoot {
     param(
-        [string]$StartDir,
-        [string[]]$Markers = @('.git', '.specify')
+        [string]$StartDir
     )
     $current = Resolve-Path $StartDir
-    while ($true) {
-        foreach ($marker in $Markers) {
-            if (Test-Path (Join-Path $current $marker)) {
-                return $current
-            }
+    
+    # First check for .specify directory (project root marker)
+    while ($current -ne [System.IO.Path]::GetPathRoot($current)) {
+        if (Test-Path (Join-Path $current '.specify') -PathType Container) {
+            return $current
         }
-        $parent = Split-Path $current -Parent
-        if ($parent -eq $current) {
-            # Reached filesystem root without finding markers
-            return $null
-        }
-        $current = $parent
+        $current = Split-Path $current -Parent
     }
+    
+    # If no .specify found, look for .git as fallback
+    $current = Resolve-Path $StartDir
+    while ($current -ne [System.IO.Path]::GetPathRoot($current)) {
+        if (Test-Path (Join-Path $current '.git') -PathType Container) {
+            return $current
+        }
+        $current = Split-Path $current -Parent
+    }
+    
+    return $null
 }
-$fallbackRoot = (Find-RepositoryRoot -StartDir $PSScriptRoot)
+
+# Resolve repository root. Prefer .specify directory when available, then fall back
+# to git information, and finally to searching for repository markers.
+$fallbackRoot = Find-RepositoryRoot -StartDir $PSScriptRoot
 if (-not $fallbackRoot) {
     Write-Error "Error: Could not determine repository root. Please run this script from within the repository."
     exit 1
 }
 
+# First try to find .specify directory (project root)
+if (Test-Path (Join-Path $fallbackRoot '.git') -PathType Container) {
+    $hasGit = $true
+} else {
+    $hasGit = $false
+}
+
 try {
     $repoRoot = git rev-parse --show-toplevel 2>$null
     if ($LASTEXITCODE -eq 0) {
-        $hasGit = $true
+        # We have git, but still prefer .specify if it exists
+        if (Test-Path (Join-Path $repoRoot '.specify') -PathType Container) {
+            $repoRoot = $fallbackRoot
+        }
     } else {
         throw "Git not available"
     }
@@ -105,13 +122,11 @@ if ($Json) {
         BRANCH_NAME = $branchName
         SPEC_FILE = $specFile
         FEATURE_NUM = $featureNum
-        HAS_GIT = $hasGit
     }
     $obj | ConvertTo-Json -Compress
 } else {
     Write-Output "BRANCH_NAME: $branchName"
     Write-Output "SPEC_FILE: $specFile"
     Write-Output "FEATURE_NUM: $featureNum"
-    Write-Output "HAS_GIT: $hasGit"
     Write-Output "SPECIFY_FEATURE environment variable set to: $branchName"
 }

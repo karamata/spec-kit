@@ -19,10 +19,22 @@ if [ -z "$FEATURE_DESCRIPTION" ]; then
 fi
 
 # Function to find the repository root by searching for existing project markers
+# Prioritizes .specify directory over .git to handle nested git repositories
 find_repo_root() {
     local dir="$1"
     while [ "$dir" != "/" ]; do
-        if [ -d "$dir/.git" ] || [ -d "$dir/.specify" ]; then
+        # Check for .specify first (project root marker)
+        if [ -d "$dir/.specify" ]; then
+            echo "$dir"
+            return 0
+        fi
+        dir="$(dirname "$dir")"
+    done
+    
+    # If no .specify found, look for .git as fallback
+    dir="$1"
+    while [ "$dir" != "/" ]; do
+        if [ -d "$dir/.git" ]; then
             echo "$dir"
             return 0
         fi
@@ -31,21 +43,26 @@ find_repo_root() {
     return 1
 }
 
-# Resolve repository root. Prefer git information when available, but fall back
-# to searching for repository markers so the workflow still functions in repositories that
-# were initialised with --no-git.
+# Resolve repository root. Prefer .specify directory when available, then fall back
+# to git information, and finally to searching for repository markers.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if git rev-parse --show-toplevel >/dev/null 2>&1; then
+# First try to find .specify directory (project root)
+REPO_ROOT="$(find_repo_root "$SCRIPT_DIR")"
+if [ -n "$REPO_ROOT" ]; then
+    # Check if we have git in this directory
+    if [ -d "$REPO_ROOT/.git" ]; then
+        HAS_GIT=true
+    else
+        HAS_GIT=false
+    fi
+elif git rev-parse --show-toplevel >/dev/null 2>&1; then
+    # Fallback to git root if no .specify found
     REPO_ROOT=$(git rev-parse --show-toplevel)
     HAS_GIT=true
 else
-    REPO_ROOT="$(find_repo_root "$SCRIPT_DIR")"
-    if [ -z "$REPO_ROOT" ]; then
-        echo "Error: Could not determine repository root. Please run this script from within the repository." >&2
-        exit 1
-    fi
-    HAS_GIT=false
+    echo "Error: Could not determine repository root. Please run this script from within the repository." >&2
+    exit 1
 fi
 
 cd "$REPO_ROOT"

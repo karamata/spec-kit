@@ -3,18 +3,28 @@
 set -e
 
 JSON_MODE=false
+DESC_MODE=false
+SHORT_DESC=""
 ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --json) JSON_MODE=true ;;
-        --help|-h) echo "Usage: $0 [--json] <feature_description>"; exit 0 ;;
-        *) ARGS+=("$arg") ;;
+        --desc) DESC_MODE=true ;;
+        --help|-h) echo "Usage: $0 [--json] [--desc <short_description>] <feature_description>"; exit 0 ;;
+        *) 
+            if [ "$DESC_MODE" = true ]; then
+                SHORT_DESC="$arg"
+                DESC_MODE=false
+            else
+                ARGS+=("$arg")
+            fi
+            ;;
     esac
 done
 
 FEATURE_DESCRIPTION="${ARGS[*]}"
 if [ -z "$FEATURE_DESCRIPTION" ]; then
-    echo "Usage: $0 [--json] <feature_description>" >&2
+    echo "Usage: $0 [--json] [--desc <short_description>] <feature_description>" >&2
     exit 1
 fi
 
@@ -81,12 +91,37 @@ if [ -d "$SPECS_DIR" ]; then
     done
 fi
 
+# Function to create meaningful branch name from description
+create_branch_name() {
+    local desc="$1"
+    
+    # Convert to lowercase and clean up
+    local clean_desc=$(echo "$desc" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9\s]/-/g' | sed 's/\s\+/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | sed 's/-$//')
+    
+    # Split into words and filter meaningful ones
+    local words=$(echo "$clean_desc" | tr '-' '\n' | grep -v '^$')
+    
+    # Remove common stop words and short words
+    local filtered_words=$(echo "$words" | grep -v -E '^(the|a|an|and|or|but|in|on|at|to|for|of|with|by|from|up|about|into|through|during|before|after|above|below|between|among|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|may|might|must|can|shall)$' | grep -E '^.{3,}$')
+    
+    # Take up to 4 meaningful words, but prioritize important ones
+    local branch_words=$(echo "$filtered_words" | head -4 | tr '\n' '-' | sed 's/-$//')
+    
+    # If we have meaningful words, use them; otherwise fallback to first 3 words
+    if [ -n "$branch_words" ]; then
+        echo "$branch_words"
+    else
+        echo "$clean_desc" | tr '-' '\n' | grep -v '^$' | head -3 | tr '\n' '-' | sed 's/-$//'
+    fi
+}
+
 NEXT=$((HIGHEST + 1))
 FEATURE_NUM=$(printf "%03d" "$NEXT")
 
-BRANCH_NAME=$(echo "$FEATURE_DESCRIPTION" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//' | sed 's/-$//')
-WORDS=$(echo "$BRANCH_NAME" | tr '-' '\n' | grep -v '^$' | head -3 | tr '\n' '-' | sed 's/-$//')
-BRANCH_NAME="${FEATURE_NUM}-${WORDS}"
+# Use SHORT_DESC if provided, otherwise use FEATURE_DESCRIPTION for branch naming
+BRANCH_DESC="${SHORT_DESC:-$FEATURE_DESCRIPTION}"
+BRANCH_WORDS=$(create_branch_name "$BRANCH_DESC")
+BRANCH_NAME="${FEATURE_NUM}-${BRANCH_WORDS}"
 
 if [ "$HAS_GIT" = true ]; then
     git checkout -b "$BRANCH_NAME"

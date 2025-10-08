@@ -1,132 +1,146 @@
 #!/usr/bin/env pwsh
-# Create a new feature
+# Create a new feature (PowerShell version, logic matches bash script)
 [CmdletBinding()]
 param(
-    [switch]$Json,
     [Parameter(ValueFromRemainingArguments = $true)]
-    [string[]]$FeatureDescription
+    [string[]]$Args
 )
 $ErrorActionPreference = 'Stop'
 
-if (-not $FeatureDescription -or $FeatureDescription.Count -eq 0) {
-    Write-Error "Usage: ./create-new-feature.ps1 [-Json] <feature description>"
+# --- Argument parsing for --json and --desc (mimic bash logic) ---
+$JsonMode = $false
+$DescMode = $false
+$ShortDesc = ""
+$FeatureArgs = @()
+for ($i = 0; $i -lt $Args.Count; $i++) {
+    $arg = $Args[$i]
+    switch ($arg) {
+        '--json' { $JsonMode = $true }
+        '--desc' { $DescMode = $true }
+        '--help' { Write-Output "Usage: ./create-new-feature.ps1 [--json] [--desc <short_description>] <feature_description>"; exit 0 }
+        '-h'    { Write-Output "Usage: ./create-new-feature.ps1 [--json] [--desc <short_description>] <feature_description>"; exit 0 }
+        default {
+            if ($DescMode) {
+                $ShortDesc = $arg
+                $DescMode = $false
+            } else {
+                $FeatureArgs += $arg
+            }
+        }
+    }
+}
+
+$FeatureDescription = ($FeatureArgs -join ' ').Trim()
+if ([string]::IsNullOrWhiteSpace($FeatureDescription)) {
+    Write-Error "Usage: ./create-new-feature.ps1 [--json] [--desc <short_description>] <feature_description>"
     exit 1
 }
-$featureDesc = ($FeatureDescription -join ' ').Trim()
 
-# Function to find the repository root by searching for existing project markers
-# Prioritizes .specify directory over .git to handle nested git repositories
-function Find-RepositoryRoot {
-    param(
-        [string]$StartDir
-    )
-    $current = Resolve-Path $StartDir
-    
-    # First check for .specify directory (project root marker)
-    while ($current -ne [System.IO.Path]::GetPathRoot($current)) {
-        if (Test-Path (Join-Path $current '.specify') -PathType Container) {
-            return $current
+# --- Find repository root (prefer .specify, fallback to .git) ---
+function Find-RepoRoot {
+    param([string]$StartDir)
+    $dir = Resolve-Path $StartDir
+    while ($dir -ne [System.IO.Path]::GetPathRoot($dir)) {
+        if (Test-Path (Join-Path $dir '.specify') -PathType Container) {
+            return $dir
         }
-        $current = Split-Path $current -Parent
+        $dir = Split-Path $dir -Parent
     }
-    
-    # If no .specify found, look for .git as fallback
-    $current = Resolve-Path $StartDir
-    while ($current -ne [System.IO.Path]::GetPathRoot($current)) {
-        if (Test-Path (Join-Path $current '.git') -PathType Container) {
-            return $current
+    # Fallback to .git
+    $dir = Resolve-Path $StartDir
+    while ($dir -ne [System.IO.Path]::GetPathRoot($dir)) {
+        if (Test-Path (Join-Path $dir '.git') -PathType Container) {
+            return $dir
         }
-        $current = Split-Path $current -Parent
+        $dir = Split-Path $dir -Parent
     }
-    
     return $null
 }
 
-# Resolve repository root. Prefer .specify directory when available, then fall back
-# to git information, and finally to searching for repository markers.
-$fallbackRoot = Find-RepositoryRoot -StartDir $PSScriptRoot
-if (-not $fallbackRoot) {
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$RepoRoot = Find-RepoRoot -StartDir $ScriptDir
+if (-not $RepoRoot) {
     Write-Error "Error: Could not determine repository root. Please run this script from within the repository."
     exit 1
 }
 
-# First try to find .specify directory (project root)
-if (Test-Path (Join-Path $fallbackRoot '.git') -PathType Container) {
-    $hasGit = $true
+# Check for git
+if (Test-Path (Join-Path $RepoRoot '.git') -PathType Container) {
+    $HasGit = $true
 } else {
-    $hasGit = $false
+    $HasGit = $false
 }
 
-try {
-    $repoRoot = git rev-parse --show-toplevel 2>$null
-    if ($LASTEXITCODE -eq 0) {
-        # We have git, but still prefer .specify if it exists
-        if (Test-Path (Join-Path $repoRoot '.specify') -PathType Container) {
-            $repoRoot = $fallbackRoot
-        }
+Set-Location $RepoRoot
+
+# --- Find next feature number ---
+$SpecsDir = Join-Path $RepoRoot 'specs'
+if (-not (Test-Path $SpecsDir)) { New-Item -ItemType Directory -Path $SpecsDir | Out-Null }
+$Highest = 0
+Get-ChildItem -Path $SpecsDir -Directory | ForEach-Object {
+    $dirname = $_.Name
+    if ($dirname -match '^(\d+)') {
+        $num = [int]$matches[1]
+        if ($num -gt $Highest) { $Highest = $num }
+    }
+}
+$Next = $Highest + 1
+$FeatureNum = ('{0:000}' -f $Next)
+
+# --- Branch name logic (matches bash) ---
+function Create-BranchName {
+    param([string]$desc)
+    $clean = $desc.ToLower() -replace '[^a-z0-9\s]', '-' -replace '\s+', '-' -replace '-+', '-' -replace '^-', '' -replace '-$', ''
+    $words = $clean -split '-' | Where-Object { $_ -and $_.Length -ge 3 -and ($_ -notmatch '^(the|a|an|and|or|but|in|on|at|to|for|of|with|by|from|up|about|into|through|during|before|after|above|below|between|among|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|may|might|must|can|shall)$') }
+    $branchWords = ($words | Select-Object -First 4) -join '-'
+    if ($branchWords) {
+        return $branchWords
     } else {
-        throw "Git not available"
-    }
-} catch {
-    $repoRoot = $fallbackRoot
-    $hasGit = $false
-}
-
-Set-Location $repoRoot
-
-$specsDir = Join-Path $repoRoot 'specs'
-New-Item -ItemType Directory -Path $specsDir -Force | Out-Null
-
-$highest = 0
-if (Test-Path $specsDir) {
-    Get-ChildItem -Path $specsDir -Directory | ForEach-Object {
-        if ($_.Name -match '^(\d{3})') {
-            $num = [int]$matches[1]
-            if ($num -gt $highest) { $highest = $num }
-        }
+        $fallback = ($clean -split '-' | Where-Object { $_ }) | Select-Object -First 3
+        return ($fallback -join '-')
     }
 }
-$next = $highest + 1
-$featureNum = ('{0:000}' -f $next)
 
-$branchName = $featureDesc.ToLower() -replace '[^a-z0-9]', '-' -replace '-{2,}', '-' -replace '^-', '' -replace '-$', ''
-$words = ($branchName -split '-') | Where-Object { $_ } | Select-Object -First 3
-$branchName = "$featureNum-$([string]::Join('-', $words))"
+$BranchDesc = if ($ShortDesc) { $ShortDesc } else { $FeatureDescription }
+$BranchWords = Create-BranchName $BranchDesc
+$BranchName = "$FeatureNum-$BranchWords"
 
-if ($hasGit) {
+# --- Create git branch if possible ---
+if ($HasGit) {
     try {
-        git checkout -b $branchName | Out-Null
+        git checkout -b $BranchName | Out-Null
     } catch {
-        Write-Warning "Failed to create git branch: $branchName"
+        Write-Warning "Failed to create git branch: $BranchName"
     }
 } else {
-    Write-Warning "[specify] Warning: Git repository not detected; skipped branch creation for $branchName"
+    Write-Warning "[specify] Warning: Git repository not detected; skipped branch creation for $BranchName"
 }
 
-$featureDir = Join-Path $specsDir $branchName
-New-Item -ItemType Directory -Path $featureDir -Force | Out-Null
-
-$template = Join-Path $repoRoot '.specify/templates/spec-template.md'
-$specFile = Join-Path $featureDir 'spec.md'
-if (Test-Path $template) { 
-    Copy-Item $template $specFile -Force 
-} else { 
-    New-Item -ItemType File -Path $specFile | Out-Null 
+# --- Create feature directory and spec file ---
+$FeatureDir = Join-Path $SpecsDir $BranchName
+if (-not (Test-Path $FeatureDir)) { New-Item -ItemType Directory -Path $FeatureDir | Out-Null }
+$Template = Join-Path $RepoRoot '.specify/templates/spec-template.md'
+$SpecFile = Join-Path $FeatureDir 'spec.md'
+if (Test-Path $Template) {
+    Copy-Item $Template $SpecFile -Force
+} else {
+    New-Item -ItemType File -Path $SpecFile | Out-Null
 }
 
-# Set the SPECIFY_FEATURE environment variable for the current session
-$env:SPECIFY_FEATURE = $branchName
+# --- Set environment variable for current session ---
+$env:SPECIFY_FEATURE = $BranchName
 
-if ($Json) {
-    $obj = [PSCustomObject]@{ 
-        BRANCH_NAME = $branchName
-        SPEC_FILE = $specFile
-        FEATURE_NUM = $featureNum
+# --- Output ---
+if ($JsonMode) {
+    $obj = [PSCustomObject]@{
+        BRANCH_NAME = $BranchName
+        SPEC_FILE = $SpecFile
+        FEATURE_NUM = $FeatureNum
     }
     $obj | ConvertTo-Json -Compress
 } else {
-    Write-Output "BRANCH_NAME: $branchName"
-    Write-Output "SPEC_FILE: $specFile"
-    Write-Output "FEATURE_NUM: $featureNum"
-    Write-Output "SPECIFY_FEATURE environment variable set to: $branchName"
+    Write-Output "BRANCH_NAME: $BranchName"
+    Write-Output "SPEC_FILE: $SpecFile"
+    Write-Output "FEATURE_NUM: $FeatureNum"
+    Write-Output "SPECIFY_FEATURE environment variable set to: $BranchName"
 }

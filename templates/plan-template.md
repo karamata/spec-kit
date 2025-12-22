@@ -151,6 +151,7 @@ directories captured above]
 
 2. **Generate component design** → `component-design.md`:
    - Detailed component breakdown for entire system
+   - Files and folder generating MUST FOLLOW exactly `Source Code (KNBS Submodule Structure)` has mention above in this file
    - Component responsibilities and interfaces
    - Data flow between components
    - **Include sequential diagrams using Mermaid syntax**

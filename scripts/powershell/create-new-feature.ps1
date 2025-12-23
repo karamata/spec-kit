@@ -99,6 +99,18 @@ function Create-BranchName {
         $fallback = ($clean -split '-' | Where-Object { $_ }) | Select-Object -First 3
         return ($fallback -join '-')
     }
+    
+    # If we have meaningful words, use first 3-4 of them
+    if ($meaningfulWords.Count -gt 0) {
+        $maxWords = if ($meaningfulWords.Count -eq 4) { 4 } else { 3 }
+        $result = ($meaningfulWords | Select-Object -First $maxWords) -join '-'
+        return $result
+    } else {
+        # Fallback to original logic if no meaningful words found
+        $result = ConvertTo-CleanBranchName -Name $Description
+        $fallbackWords = ($result -split '-') | Where-Object { $_ } | Select-Object -First 3
+        return [string]::Join('-', $fallbackWords)
+    }
 }
 
 $BranchDesc = if ($ShortDesc) { $ShortDesc } else { $FeatureDescription }
@@ -144,3 +156,4 @@ if ($JsonMode) {
     Write-Output "FEATURE_NUM: $FeatureNum"
     Write-Output "SPECIFY_FEATURE environment variable set to: $BranchName"
 }
+

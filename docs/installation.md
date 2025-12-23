@@ -31,10 +31,10 @@ uvx --from git+https://github.com/karamata/spec-kit.git specify init --here
 You can proactively specify your AI agent during initialization:
 
 ```bash
-uvx --from git+https://github.com/github/spec-kit.git specify init <project_name> --ai claude
-uvx --from git+https://github.com/github/spec-kit.git specify init <project_name> --ai gemini
-uvx --from git+https://github.com/github/spec-kit.git specify init <project_name> --ai copilot
-uvx --from git+https://github.com/github/spec-kit.git specify init <project_name> --ai codebuddy
+uvx --from git+https://github.com/karamata/spec-kit.git specify init <project_name> --ai claude
+uvx --from git+https://github.com/karamata/spec-kit.git specify init <project_name> --ai gemini
+uvx --from git+https://github.com/karamata/spec-kit.git specify init <project_name> --ai copilot
+uvx --from git+https://github.com/karamata/spec-kit.git specify init <project_name> --ai codebuddy
 ```
 
 ### Specify Script Type (Shell vs PowerShell)

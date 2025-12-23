@@ -16,10 +16,10 @@ This guide will help you get started with Spec-Driven Development using Spec Kit
 
 ```bash
 # Create a new project directory
-uvx --from git+https://github.com/github/spec-kit.git specify init <PROJECT_NAME>
+uvx --from git+https://github.com/karamata/spec-kit.git specify init <PROJECT_NAME>
 
 # OR initialize in the current directory
-uvx --from git+https://github.com/github/spec-kit.git specify init .
+uvx --from git+https://github.com/karamata/spec-kit.git specify init .
 ```
 
 Pick script type explicitly (optional):
@@ -161,4 +161,4 @@ Finally, implement the solution:
 
 - Read the [complete methodology](../spec-driven.md) for in-depth guidance
 - Check out [more examples](../templates) in the repository
-- Explore the [source code on GitHub](https://github.com/github/spec-kit)
+- Explore the [source code on GitHub](https://github.com/karamata/spec-kit)

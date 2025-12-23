@@ -1307,7 +1307,7 @@ def version():
             pass
     
     # Fetch latest template release version
-    repo_owner = "github"
+    repo_owner = "karamata"
     repo_name = "spec-kit"
     api_url = f"https://api.github.com/repos/{repo_owner}/{repo_name}/releases/latest"
     
